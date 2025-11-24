@@ -168,9 +168,7 @@ MAX_FILE_SIZE=5242880
 
 Dự án này được phân phối dưới MIT License. Xem file `LICENSE` để biết thêm chi tiết.
 
-## 👥 Tác Giả
 
-- **Võ Tấn Thịnh** - [@VoTanThinh12](https://github.com/VoTanThinh12)
 
 ## 📞 Liên Hệ
 
