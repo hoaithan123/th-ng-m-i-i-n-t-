@@ -11,25 +11,59 @@ class CustomError extends Error {
 }
 
 // ------------------------------------------
-// 1. Lấy giỏ hàng
+// 1. Lấy giỏ hàng (bao gồm cả combo)
 // ------------------------------------------
 exports.getCartItems = async (customerId) => {
-    return prisma.gio_hang.findMany({
-        where: { id_khach_hang: customerId },
-        include: {
-            san_pham: {
-                select: {
-                    id: true,
-                    ten_san_pham: true,
-                    ma_san_pham: true,
-                    gia_ban: true,
-                    so_luong: true,
-                    don_vi_tinh: true
+    const [products, combos] = await Promise.all([
+        prisma.gio_hang.findMany({
+            where: { id_khach_hang: customerId },
+            include: {
+                san_pham: {
+                    select: {
+                        id: true,
+                        ten_san_pham: true,
+                        ma_san_pham: true,
+                        gia_ban: true,
+                        so_luong: true,
+                        don_vi_tinh: true,
+                        hinh_anh: true
+                    }
                 }
-            }
-        },
-        orderBy: { ngay_them: 'desc' }
-    });
+            },
+            orderBy: { ngay_them: 'desc' }
+        }),
+        prisma.gio_hang_combo.findMany({
+            where: { id_khach_hang: customerId },
+            include: {
+                combo_items: {
+                    include: {
+                        san_pham: {
+                            select: {
+                                id: true,
+                                ten_san_pham: true,
+                                ma_san_pham: true,
+                                gia_ban: true,
+                                hinh_anh: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { ngay_them: 'desc' }
+        })
+    ]);
+
+    // Merge và sắp xếp theo ngày thêm (mới nhất lên trên)
+    const allItems = [
+        ...products.map(item => ({ ...item, type: 'product', sortDate: item.ngay_them })),
+        ...combos.map(item => ({ ...item, type: 'combo', sortDate: item.ngay_them }))
+    ].sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
+
+    return {
+        products: products.map(item => ({ ...item, type: 'product' })),
+        combos: combos.map(item => ({ ...item, type: 'combo' })),
+        allItems // Thêm allItems để dễ xử lý
+    };
 };
 
 // ------------------------------------------
@@ -162,7 +196,141 @@ exports.removeCartItem = async (id, customerId) => {
 // 5. Xóa toàn bộ giỏ hàng
 // ------------------------------------------
 exports.clearCart = async (customerId) => {
-    await prisma.gio_hang.deleteMany({
-        where: { id_khach_hang: customerId }
+    await Promise.all([
+        prisma.gio_hang.deleteMany({
+            where: { id_khach_hang: customerId }
+        }),
+        prisma.gio_hang_combo.deleteMany({
+            where: { id_khach_hang: customerId }
+        })
+    ]);
+};
+
+// ------------------------------------------
+// 6. Thêm combo vào giỏ hàng (custom combo)
+// ------------------------------------------
+exports.addComboToCart = async (customerId, comboData) => {
+    const { ten_combo, gia_ban, so_luong, items } = comboData;
+
+    if (!ten_combo || !items || !Array.isArray(items) || items.length === 0) {
+        throw new CustomError('Thông tin combo không hợp lệ', 400);
+    }
+
+    const quantity = Number(so_luong) || 1;
+    const totalPrice = Number(gia_ban) || 0;
+
+    // Kiểm tra tồn kho cho tất cả sản phẩm
+    for (const item of items) {
+        const product = await prisma.san_pham.findUnique({
+            where: { id: item.id_san_pham }
+        });
+
+        if (!product) {
+            throw new CustomError(`Sản phẩm ID ${item.id_san_pham} không tồn tại`, 404);
+        }
+
+        const requiredQuantity = item.so_luong * quantity;
+        if (product.so_luong < requiredQuantity) {
+            throw new CustomError(
+                `Sản phẩm "${product.ten_san_pham}" chỉ còn ${product.so_luong}, cần ${requiredQuantity}`,
+                400
+            );
+        }
+    }
+
+    // Tạo combo trong giỏ hàng
+    return prisma.$transaction(async (tx) => {
+        const cartCombo = await tx.gio_hang_combo.create({
+            data: {
+                id_khach_hang: Number(customerId),
+                ten_combo: ten_combo,
+                gia_ban: totalPrice.toFixed(2),
+                so_luong: quantity,
+                combo_items: {
+                    create: items.map(item => ({
+                        id_san_pham: item.id_san_pham,
+                        ten_san_pham: item.ten_san_pham,
+                        so_luong: item.so_luong,
+                        don_gia: Number(item.gia_ban).toFixed(2)
+                    }))
+                }
+            },
+            include: {
+                combo_items: {
+                    include: {
+                        san_pham: {
+                            select: {
+                                id: true,
+                                ten_san_pham: true,
+                                ma_san_pham: true,
+                                gia_ban: true,
+                                hinh_anh: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return cartCombo;
     });
+};
+
+// ------------------------------------------
+// 7. Cập nhật số lượng combo trong giỏ
+// ------------------------------------------
+exports.updateComboQuantity = async (id, customerId, so_luong) => {
+    if (!so_luong || so_luong < 1) {
+        throw new CustomError('Số lượng không hợp lệ', 400);
+    }
+
+    const cartCombo = await prisma.gio_hang_combo.findFirst({
+        where: { id: parseInt(id), id_khach_hang: customerId },
+        include: { combo_items: { include: { san_pham: true } } }
+    });
+
+    if (!cartCombo) {
+        throw new CustomError('Không tìm thấy combo trong giỏ', 404);
+    }
+
+    // Kiểm tra tồn kho
+    for (const item of cartCombo.combo_items) {
+        const requiredQuantity = item.so_luong * so_luong;
+        if (item.san_pham.so_luong < requiredQuantity) {
+            throw new CustomError(
+                `Sản phẩm "${item.san_pham.ten_san_pham}" chỉ còn ${item.san_pham.so_luong}`,
+                400
+            );
+        }
+    }
+
+    return prisma.gio_hang_combo.update({
+        where: { id: parseInt(id) },
+        data: { so_luong },
+        include: {
+            combo_items: {
+                include: {
+                    san_pham: {
+                        select: {
+                            id: true,
+                            ten_san_pham: true,
+                            ma_san_pham: true,
+                            gia_ban: true,
+                            hinh_anh: true
+                        }
+                    }
+                }
+            }
+        }
+    });
+};
+
+// ------------------------------------------
+// 8. Xóa combo khỏi giỏ hàng
+// ------------------------------------------
+exports.removeComboFromCart = async (id, customerId) => {
+    const result = await prisma.gio_hang_combo.deleteMany({
+        where: { id: parseInt(id), id_khach_hang: customerId }
+    });
+    return { deleted: result.count > 0 };
 };

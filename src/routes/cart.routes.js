@@ -12,4 +12,9 @@ router.put('/:id', cartController.updateCartItem);
 router.delete('/:id', cartController.removeFromCart);
 router.delete('/', cartController.clearCart);
 
+// Combo routes
+router.post('/combo/add', cartController.addComboToCart);
+router.put('/combo/:id', cartController.updateComboQuantity);
+router.delete('/combo/:id', cartController.removeComboFromCart);
+
 module.exports = router;

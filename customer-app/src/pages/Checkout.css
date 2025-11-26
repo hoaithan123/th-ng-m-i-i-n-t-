@@ -3,11 +3,18 @@
   margin: 0 auto;
   padding: 48px 24px;
   min-height: calc(100vh - 200px);
+  background: radial-gradient(1200px 300px at 50% 0%, #f6fbff 0%, #ffffff 60%);
 }
 
 .checkout-page h1 {
   font-size: 32px;
   margin-bottom: 32px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .checkout-content {
@@ -125,4 +132,85 @@
   .checkout-summary {
     position: static;
   }
+}
+
+/* Polished UI for checkout */
+.checkout-page .ant-card {
+  border-radius: 16px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.checkout-page .ant-card .ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.checkout-page .ant-card .ant-card-head-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.checkout-page .ant-form-item-label > label {
+  font-weight: 600;
+}
+
+/* Inputs */
+.checkout-page .ant-input,
+.checkout-page .ant-input-affix-wrapper,
+.checkout-page textarea.ant-input {
+  border-radius: 10px;
+}
+
+.checkout-page .ant-input:focus,
+.checkout-page .ant-input-affix-wrapper:focus,
+.checkout-page .ant-input-affix-wrapper-focused,
+.checkout-page textarea.ant-input:focus {
+  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.15);
+  border-color: #91caff;
+}
+
+/* Radio options */
+.checkout-page .ant-radio-group .ant-radio-wrapper {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid #eaeaea;
+  border-radius: 10px;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.checkout-page .ant-radio-group .ant-radio-wrapper + .ant-radio-wrapper {
+  margin-top: 8px;
+}
+
+.checkout-page .ant-radio-wrapper:hover {
+  border-color: #91caff;
+  box-shadow: 0 4px 10px rgba(24, 144, 255, 0.1);
+}
+
+.checkout-page .ant-radio-wrapper-checked {
+  border-color: #1677ff !important;
+  background: #f0f7ff;
+  box-shadow: 0 6px 14px rgba(24, 144, 255, 0.12);
+}
+
+/* Primary button */
+.checkout-page .ant-btn-primary {
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1677ff 0%, #69b1ff 100%);
+  border: none;
+  box-shadow: 0 12px 24px rgba(22, 119, 255, 0.25);
+}
+
+.checkout-page .ant-btn-primary:hover,
+.checkout-page .ant-btn-primary:focus {
+  background: linear-gradient(135deg, #3e8cff 0%, #86c5ff 100%);
+}
+
+.order-summary-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0,0,0,0), #e5e7eb, rgba(0,0,0,0));
+  margin: 16px 0;
 }

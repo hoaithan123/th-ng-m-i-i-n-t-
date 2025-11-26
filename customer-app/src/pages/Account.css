@@ -1,0 +1,128 @@
+.account-page {
+  min-height: calc(100vh - 200px);
+  background: linear-gradient(135deg, #f5f7ff 0%, #fef9ff 100%);
+  padding: 48px 24px;
+}
+
+.account-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 992px) {
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-card,
+.content-card {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(31, 38, 135, 0.08);
+  border: none !important;
+  overflow: visible;
+}
+
+.summary-card .ant-card-body,
+.content-card .ant-card-body {
+  overflow: visible;
+}
+
+.summary-card:hover,
+.content-card:hover {
+  transform: none !important;
+  box-shadow: 0 10px 30px rgba(31, 38, 135, 0.08) !important;
+}
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-header h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #1f1f1f;
+}
+
+.summary-contact p {
+  margin: 0;
+  color: #595959;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.summary-contact p + p {
+  margin-top: 6px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.membership-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.membership-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #595959;
+}
+
+.account-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.account-security .security-card,
+.account-preferences .ant-card {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.security-row,
+.preference-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.security-row h4,
+.preference-item h4 {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.security-row p,
+.preference-item p {
+  margin: 0;
+  color: #8c8c8c;
+}
+
+.activity-time {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.account-content .ant-tabs-tab {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.account-content .ant-tabs-ink-bar {
+  background: linear-gradient(90deg, #722ed1 0%, #eb2f96 100%);
+}
+

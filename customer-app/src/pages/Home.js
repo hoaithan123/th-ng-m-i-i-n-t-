@@ -32,11 +32,17 @@ import {
   BarChartOutlined,
   TrendingUpOutlined,
   LikeOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  HistoryOutlined,
+  FieldTimeOutlined,
+  QrcodeOutlined,
+  CreditCardOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { storefrontAPI } from '../utils/api';
+import { storefrontAPI, comboAPI } from '../utils/api';
 import ProductCard from '../components/ProductCard';
+import SimplePromoSlider from '../components/SimplePromoSlider';
+import { message } from 'antd';
 import './Home.css';
 
 const { Title, Paragraph } = Typography;
@@ -46,14 +52,43 @@ const Home = ({ onCartUpdate }) => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [newProducts, setNewProducts] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
+  const [timeBasedProducts, setTimeBasedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [timeBasedLoading, setTimeBasedLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('featured');
+  const [selectedStore, setSelectedStore] = useState('store_1');
+  const [flashSaleEndTime, setFlashSaleEndTime] = useState(null);
+  const [now, setNow] = useState(new Date());
+  const [currentTimeBasedTags, setCurrentTimeBasedTags] = useState([]);
+  const [combos, setCombos] = useState([]);
+  const [combosLoading, setCombosLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAllData();
+    const loadData = async () => {
+      await fetchAllData();
+      await fetchCombos();
+      // Đợi một chút để đảm bảo state đã được cập nhật
+      setTimeout(() => {
+        fetchTimeBasedRecommendations();
+      }, 100);
+    };
+    
+    loadData();
+    
+    // Thiết lập thời gian kết thúc Flash Sale là cuối ngày hôm nay
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    setFlashSaleEndTime(endOfDay);
+
+    // Cập nhật thời gian hiện tại mỗi giây cho countdown
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const fetchAllData = async () => {
@@ -62,8 +97,7 @@ const Home = ({ onCartUpdate }) => {
       
       // Fetch featured products
       const featuredResponse = await storefrontAPI.getProducts({ 
-        limit: 8,
-        inStock: 'false'
+        limit: 8
       });
       setFeaturedProducts(featuredResponse.data.items || []);
       
@@ -91,14 +125,293 @@ const Home = ({ onCartUpdate }) => {
     }
   };
 
-  const handleSearch = (value) => {
-    setSearchQuery(value);
-    navigate(`/products?search=${encodeURIComponent(value)}`);
+  const getGreetingMessage = () => {
+    const tod = getTimeOfDay();
+    switch (tod) {
+      case 'morning':
+        return 'Chúc bạn buổi sáng tốt lành!';
+      case 'lunch':
+        return 'Chúc bạn bữa trưa ngon miệng!';
+      case 'afternoon_snack':
+        return 'Buổi chiều năng động!';
+      case 'dinner':
+        return 'Chúc bạn bữa tối ấm áp!';
+      case 'late_night':
+      default:
+        return 'Khuya rồi, nghỉ ngơi nhé!';
+    }
+  };
+
+  const handleSearch = (raw) => {
+    const inputVal = typeof raw === 'string' 
+      ? raw 
+      : (raw && raw.target && typeof raw.target.value === 'string' ? raw.target.value : searchQuery);
+    const q = (inputVal || '').trim();
+    setSearchQuery(q);
+    if (q) {
+      navigate(`/products?search=${encodeURIComponent(q)}`);
+    } else {
+      navigate('/products');
+    }
   };
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
     navigate(`/products?category=${category}`);
+  };
+
+  const getStoreLabel = (storeId) => {
+    const stores = {
+      store_1: 'Chi nhánh trung tâm',
+      store_2: 'Chi nhánh khu dân cư',
+      store_3: 'Chi nhánh gần bạn',
+    };
+    return stores[storeId] || 'Chi nhánh trung tâm';
+  };
+
+  const getEtaText = (storeId) => {
+    switch (storeId) {
+      case 'store_1':
+        return 'Giao trong ~20-30 phút';
+      case 'store_2':
+        return 'Giao trong ~15-25 phút';
+      case 'store_3':
+        return 'Giao trong ~10-20 phút';
+      default:
+        return 'Giao nhanh trong vòng 30 phút';
+    }
+  };
+
+  const getTimeOfDay = () => {
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const timeInMinutes = hour * 60 + minute;
+    
+    // 5h sáng - 10h sáng: Đồ ăn sáng
+    if (timeInMinutes >= 5 * 60 && timeInMinutes < 10 * 60) {
+      return 'morning';
+    }
+    // 10h sáng - 13h30 chiều: Đồ ăn chính
+    if (timeInMinutes >= 10 * 60 && timeInMinutes < 13 * 60 + 30) {
+      return 'lunch';
+    }
+    // 13h30 - 18h (trước 6h tối): Ăn nhẹ/vặt
+    if (timeInMinutes >= 13 * 60 + 30 && timeInMinutes < 18 * 60) {
+      return 'afternoon_snack';
+    }
+    // 18h - 22h (6h tối - 10h tối): Món ăn chính
+    if (timeInMinutes >= 18 * 60 && timeInMinutes < 22 * 60) {
+      return 'dinner';
+    }
+    // Sau 22h (10h tối): Đồ ăn nhẹ/vặt
+    return 'late_night';
+  };
+
+  const getTimeOfDayLabel = () => {
+    const tod = getTimeOfDay();
+    switch (tod) {
+      case 'morning':
+        return 'Đồ ăn sáng - Cà phê & Ăn nhẹ';
+      case 'lunch':
+        return 'Món ăn chính - Bữa trưa';
+      case 'afternoon_snack':
+        return 'Đồ ăn vặt xế chiều';
+      case 'dinner':
+        return 'Món ăn chính - Bữa tối';
+      case 'late_night':
+      default:
+        return 'Đồ ăn nhẹ - Cứu đói khuya';
+    }
+  };
+
+  const fetchTimeBasedRecommendations = async () => {
+    try {
+      setTimeBasedLoading(true);
+      const tod = getTimeOfDay();
+      const response = await storefrontAPI.getTimeBasedRecommendations({ 
+        timeOfDay: tod,
+        limit: 8
+      });
+      
+      let products = response.data.items || [];
+      
+      // Fallback nếu không có sản phẩm từ API
+      if (products.length === 0) {
+        const all = [...newProducts, ...featuredProducts, ...bestSellers];
+        // Filter theo category tương ứng với khung giờ
+        // CHỈ bao gồm đồ ăn/đồ uống, LOẠI TRỪ: household, personalcare, groceries
+        const categoryMap = {
+          'morning': ['drinks', 'dairy', 'snacks'], // Đồ ăn sáng
+          'lunch': ['instant', 'frozen'], // Bữa trưa
+          'afternoon_snack': ['snacks', 'drinks'], // Xế chiều
+          'dinner': ['instant', 'frozen'], // Bữa tối
+          'late_night': ['instant', 'snacks', 'frozen'] // Khuya
+        };
+        const excludeCategories = ['household', 'personalcare', 'groceries'];
+        const categories = categoryMap[tod] || [];
+        if (categories.length > 0) {
+          // Filter theo category và loại trừ các categories không phải đồ ăn/đồ uống
+          products = all.filter(p => 
+            categories.includes(p.danh_muc) && 
+            !excludeCategories.includes(p.danh_muc)
+          );
+        }
+        // Nếu vẫn không có, lấy bất kỳ sản phẩm đồ ăn/đồ uống
+        if (products.length === 0) {
+          const foodCategories = ['drinks', 'snacks', 'dairy', 'instant', 'frozen'];
+          products = all.filter(p => 
+            foodCategories.includes(p.danh_muc) && 
+            !excludeCategories.includes(p.danh_muc)
+          );
+        }
+        products = products.slice(0, 8);
+      }
+      
+      setTimeBasedProducts(products);
+      
+      // Lưu tags hiện tại để dùng cho nút "Xem thêm"
+      if (products.length > 0) {
+        // Lấy tags từ sản phẩm đầu tiên nếu có
+        const firstProductTags = products[0]?.tags || '';
+        if (firstProductTags) {
+          try {
+            const parsed = JSON.parse(firstProductTags);
+            setCurrentTimeBasedTags(Array.isArray(parsed) ? parsed : [parsed]);
+          } catch {
+            setCurrentTimeBasedTags(firstProductTags.split(',').map(t => t.trim()).filter(t => t));
+          }
+        } else {
+          // Nếu không có tags, dùng category để filter khi click "Xem thêm"
+          const categoryMap = {
+            'morning': ['đồ ăn', 'đồ uống'],
+            'afternoon': ['đồ ăn nhẹ', 'đồ uống'],
+            'evening': ['đồ ăn chính', 'đồ ăn'],
+            'late_night': ['đồ ăn nhẹ', 'đồ ăn']
+          };
+          setCurrentTimeBasedTags(categoryMap[tod] || []);
+        }
+      }
+    } catch (error) {
+      console.error('Fetch time-based recommendations error:', error);
+      // Fallback to featured products
+      const all = [...newProducts, ...featuredProducts, ...bestSellers];
+      const fallback = all.slice(0, 8);
+      setTimeBasedProducts(fallback);
+    } finally {
+      setTimeBasedLoading(false);
+    }
+  };
+
+  const getTimeBasedProducts = () => {
+    return timeBasedProducts.length > 0 ? timeBasedProducts : [];
+  };
+
+  const getFlashSaleProducts = () => {
+    const base = bestSellers.length ? bestSellers : featuredProducts;
+    return base.slice(0, 4);
+  };
+
+  const getPremiumDealProducts = () => {
+    const base = featuredProducts.length ? [...featuredProducts] : [...products];
+    return base
+      .sort((a, b) => Number(b.gia_ban || 0) - Number(a.gia_ban || 0))
+      .slice(0, 4);
+  };
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined) return 'Liên hệ';
+    const number = Number(value);
+    if (Number.isNaN(number)) return 'Liên hệ';
+    return `${number.toLocaleString('vi-VN')} đ`;
+  };
+
+  const fetchCombos = async () => {
+    try {
+      setCombosLoading(true);
+      const response = await comboAPI.getAllCombos();
+      setCombos(response.data || []);
+    } catch (error) {
+      console.error('Fetch combos error:', error);
+      setCombos([]);
+    } finally {
+      setCombosLoading(false);
+    }
+  };
+
+  const handleAddComboToCart = async (comboId, so_luong = 1) => {
+    try {
+      const token = localStorage.getItem('customerToken');
+      if (!token) {
+        message.warning('Vui lòng đăng nhập để thêm combo vào giỏ hàng');
+        navigate('/login');
+        return;
+      }
+
+      await comboAPI.addComboToCart(comboId, so_luong);
+      message.success('Đã thêm combo vào giỏ hàng');
+      if (onCartUpdate) onCartUpdate();
+    } catch (error) {
+      message.error(error.response?.data?.error || 'Có lỗi xảy ra khi thêm combo vào giỏ hàng');
+    }
+  };
+
+  const calculateComboPrice = (combo) => {
+    if (combo.gia_ban) {
+      return Number(combo.gia_ban);
+    }
+    // Tính từ tổng giá các sản phẩm trong combo
+    if (combo.combo_item && combo.combo_item.length > 0) {
+      return combo.combo_item.reduce((total, item) => {
+        const productPrice = Number(item.san_pham?.gia_ban || 0);
+        const quantity = item.so_luong || 1;
+        return total + (productPrice * quantity);
+      }, 0);
+    }
+    return 0;
+  };
+
+  const utilityActions = [
+    {
+      key: 'repeat',
+      title: 'Đặt lại đơn cũ',
+      description: 'Mua lại món yêu thích chỉ với 1 chạm',
+      icon: <HistoryOutlined />,
+      onClick: () => navigate('/orders?repeat=true'),
+    },
+    {
+      key: 'schedule',
+      title: 'Đặt giao giờ cao điểm',
+      description: 'Giữ chỗ giao trước giờ ăn tối',
+      icon: <FieldTimeOutlined />,
+      onClick: () => navigate('/products?schedule=true'),
+    },
+    {
+      key: 'qr',
+      title: 'Quét QR nhận hàng',
+      description: 'Lấy đơn không cần xếp hàng',
+      icon: <QrcodeOutlined />,
+      onClick: () => navigate('/qr-pickup'),
+    },
+    {
+      key: 'membership',
+      title: 'Ví thành viên',
+      description: 'Tích điểm - hoàn tiền mỗi ngày',
+      icon: <CreditCardOutlined />,
+      onClick: () => navigate('/membership'),
+    },
+  ];
+
+
+  const getCountdown = () => {
+    if (!flashSaleEndTime) return null;
+    const diff = flashSaleEndTime - now;
+    if (diff <= 0) return 'Đã kết thúc';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -114,7 +427,7 @@ const Home = ({ onCartUpdate }) => {
 
   return (
     <div className="home-page">
-      {/* Enhanced Hero Section */}
+      {/* Enhanced Hero Section - ĐẨY LÊN ĐẦU */}
       <section className="hero-section">
         <div className="hero-content">
           <div className="hero-text">
@@ -123,10 +436,10 @@ const Home = ({ onCartUpdate }) => {
               Cửa hàng tiện lợi #1 Việt Nam
             </div>
             <Title level={1} className="hero-title">
-              <FireOutlined style={{ color: '#FFB7C5', marginRight: 12 }} />
+              <FireOutlined style={{ color: '#93c5fd', marginRight: 12 }} />
               Mua sắm thông minh
               <br />
-              <span style={{ color: '#FFC0CB' }}>Giao hàng siêu tốc</span>
+              <span style={{ color: '#e0f2fe' }}>Giao hàng siêu tốc</span>
             </Title>
             <Paragraph className="hero-subtitle">
               🚀 Giao hàng trong 15-30 phút • 💰 Miễn phí ship đơn từ 100k • 🛡️ 100% chính hãng
@@ -139,20 +452,26 @@ const Home = ({ onCartUpdate }) => {
                   placeholder="Tìm kiếm sản phẩm, thương hiệu..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onPressEnter={handleSearch}
+                  onPressEnter={(e) => handleSearch(e.target.value)}
                   className="search-input"
                   prefix={<SearchOutlined style={{ color: '#666' }} />}
                 />
                 <Button 
                   type="primary" 
                   icon={<SearchOutlined />}
-                  onClick={handleSearch}
+                  onClick={() => handleSearch(searchQuery)}
                   className="search-button"
                 >
                   Tìm kiếm
                 </Button>
               </div>
             </div>
+
+            {false && (
+              <div />
+            )}
+
+            {/* Store selector removed as requested */}
 
             <Space size="large" style={{ marginTop: 24 }}>
               <Button 
@@ -176,6 +495,16 @@ const Home = ({ onCartUpdate }) => {
           </div>
           
           <div className="hero-features">
+            {/* Real-time Clock on the right */}
+            <Card size="small" className="clock-card">
+              <div className="clock-time">
+                {now.toLocaleTimeString('vi-VN', { hour12: false })}
+              </div>
+              <div className="clock-date">
+                {now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </div>
+              <div className="clock-greeting">{getGreetingMessage()}</div>
+            </Card>
             <div className="hero-stats">
               <Row gutter={[16, 16]}>
                 <Col span={12}>
@@ -219,6 +548,9 @@ const Home = ({ onCartUpdate }) => {
           </div>
         </div>
       </section>
+
+      {/* Simple promo image slider */}
+      <SimplePromoSlider onViewProducts={() => navigate('/products')} />
 
       {/* Quick Stats Section */}
       <section className="quick-stats-section">
@@ -268,7 +600,6 @@ const Home = ({ onCartUpdate }) => {
           </Row>
         </div>
       </section>
-
       {/* Enhanced Categories Section */}
       <section className="categories-section">
         <div className="container">
@@ -285,6 +616,9 @@ const Home = ({ onCartUpdate }) => {
               Xem tất cả →
             </Button>
           </div>
+          <Paragraph style={{ color: '#8c8c8c', marginBottom: 24 }}>
+            Chọn nhanh nhóm hàng bạn cần, chúng tôi luôn sẵn sàng đóng gói và giao tận cửa.
+          </Paragraph>
           
           <Row gutter={[16, 16]}>
             {[
@@ -315,18 +649,144 @@ const Home = ({ onCartUpdate }) => {
         </div>
       </section>
 
+      {/* Time-Based Recommendations Section */}
+      <section className="featured-products recommendations-section section-accent-reco">
+        <div className="section-header">
+          <div>
+            <Title level={2} className="section-title">
+              <ClockCircleOutlined style={{ marginRight: 8 }} />
+              {getTimeOfDayLabel()}
+            </Title>
+            <Paragraph style={{ color: '#8c8c8c', marginBottom: 0 }}>
+              Gợi ý tự động theo thời điểm - Mua ngay không cần tìm kiếm
+            </Paragraph>
+          </div>
+          {getTimeBasedProducts().length > 0 && (
+            <Button 
+              type="link" 
+              onClick={() => {
+                const tagsParam = currentTimeBasedTags.length > 0 
+                  ? `tags=${currentTimeBasedTags.join(',')}` 
+                  : '';
+                const timeParam = `timeOfDay=${getTimeOfDay()}`;
+                navigate(`/products?${tagsParam ? tagsParam + '&' : ''}${timeParam}`);
+              }}
+            >
+              Xem thêm gợi ý phù hợp →
+            </Button>
+          )}
+        </div>
+        {timeBasedLoading ? (
+          <Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '60px 0' }} />
+        ) : (
+          <Row gutter={[16, 16]}>
+            {getTimeBasedProducts().slice(0, 8).length > 0 ? (
+              getTimeBasedProducts().slice(0, 8).map((product) => (
+                <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                  <ProductCard product={product} onCartUpdate={onCartUpdate} />
+                </Col>
+              ))
+            ) : (
+              <Col span={24}>
+                <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                  <div>Đang tải sản phẩm phù hợp...</div>
+                </div>
+              </Col>
+            )}
+          </Row>
+        )}
+      </section>
+
+      {/* Flash Sale Section */}
+      <section className="featured-products flash-sale-section section-accent-flash">
+        <div className="section-header">
+          <div>
+            <Title level={2} className="section-title">
+              <ThunderboltOutlined style={{ marginRight: 8 }} />
+              Flash sale hôm nay
+            </Title>
+            <Paragraph style={{ color: '#8c8c8c', marginBottom: 0 }}>
+              Số lượng giới hạn - Ưu tiên đơn thanh toán sớm
+            </Paragraph>
+          </div>
+          {getFlashSaleProducts().length > 0 && (
+            <Button 
+              type="link" 
+              onClick={() => navigate('/products?flash=true')}
+            >
+              Xem tất cả ưu đãi →
+            </Button>
+          )}
+        </div>
+        {loading ? (
+          <Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '60px 0' }} />
+        ) : (
+          <Row gutter={[16, 16]}>
+            {getFlashSaleProducts().slice(0, 4).length > 0 ? (
+              getFlashSaleProducts().slice(0, 4).map((product) => (
+                <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                  <ProductCard product={product} onCartUpdate={onCartUpdate} />
+                </Col>
+              ))
+            ) : (
+              <Col span={24}>
+                <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                  <div>Chưa có sản phẩm flash sale</div>
+                </div>
+              </Col>
+            )}
+          </Row>
+        )}
+      </section>
+
+      <section className="featured-products premium-deal-section section-accent-premium">
+        <div className="section-header">
+          <Title level={2} className="section-title">
+            <CrownOutlined style={{ marginRight: 8 }} />
+            Deal cao cấp
+          </Title>
+          {getPremiumDealProducts().length > 0 && (
+            <Button 
+              type="link" 
+              onClick={() => navigate('/products?premium=true')}
+            >
+              Xem tất cả ưu đãi →
+            </Button>
+          )}
+        </div>
+        {loading ? (
+          <Spin size="large" style={{ display: 'block', textAlign: 'center', padding: '60px 0' }} />
+        ) : (
+          <Row gutter={[16, 16]}>
+            {getPremiumDealProducts().length > 0 ? (
+              getPremiumDealProducts().map((product) => (
+                <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                  <ProductCard product={product} onCartUpdate={onCartUpdate} />
+                </Col>
+              ))
+            ) : (
+              <Col span={24}>
+                <div style={{ textAlign: 'center', padding: '50px 0' }}>
+                  <div>Chưa có sản phẩm deal cao cấp</div>
+                </div>
+              </Col>
+            )}
+          </Row>
+        )}
+      </section>
+
+
       {/* Enhanced Products Section with Tabs */}
-      <section className="featured-products">
+      <section className="featured-products section-accent-featured">
         <div className="container">
           <div className="section-header">
             <Title level={2} className="section-title">
-              <FireOutlined style={{ color: '#FFB7C5', marginRight: 8 }} />
+              <FireOutlined style={{ marginRight: 8 }} />
               Sản phẩm nổi bật
             </Title>
             <Button 
               type="link" 
               onClick={() => navigate('/products')}
-              style={{ fontSize: 16, fontWeight: 500, color: '#FFB7C5' }}
             >
               Xem tất cả →
             </Button>
@@ -345,17 +805,17 @@ const Home = ({ onCartUpdate }) => {
                   </span>
                 ),
                 children: (
-                  <Row gutter={[24, 24]}>
+                  <Row gutter={[16, 16]}>
                     {featuredProducts.length > 0 ? (
-                      featuredProducts.map(product => (
-                        <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                      featuredProducts.map((product, index) => (
+                        <Col xs={24} sm={12} md={8} lg={6} key={product.id || index}>
                           <ProductCard product={product} onCartUpdate={onCartUpdate} />
                         </Col>
                       ))
                     ) : (
                       <Col span={24}>
                         <div style={{ textAlign: 'center', padding: '50px 0' }}>
-                          <Skeleton active paragraph={{ rows: 4 }} />
+                          <div>Không có sản phẩm nổi bật</div>
                         </div>
                       </Col>
                     )}
@@ -371,10 +831,10 @@ const Home = ({ onCartUpdate }) => {
                   </span>
                 ),
                 children: (
-                  <Row gutter={[24, 24]}>
+                  <Row gutter={[16, 16]}>
                     {newProducts.length > 0 ? (
                       newProducts.map(product => (
-                        <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                        <Col xs={24} sm={12} md={8} lg={6} xl={4} key={product.id}>
                           <ProductCard product={product} onCartUpdate={onCartUpdate} />
                         </Col>
                       ))
@@ -397,10 +857,10 @@ const Home = ({ onCartUpdate }) => {
                   </span>
                 ),
                 children: (
-                  <Row gutter={[24, 24]}>
+                  <Row gutter={[16, 16]}>
                     {bestSellers.length > 0 ? (
                       bestSellers.map(product => (
-                        <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+                        <Col xs={24} sm={12} md={8} lg={6} xl={4} key={product.id}>
                           <ProductCard product={product} onCartUpdate={onCartUpdate} />
                         </Col>
                       ))
@@ -419,198 +879,185 @@ const Home = ({ onCartUpdate }) => {
         </div>
       </section>
 
-      {/* Enhanced Promotions Section */}
-      <section className="promotions-section">
+      {/* Utilities Section */}
+      <section className="utilities-section">
         <div className="container">
-          <Title level={2} className="section-title">
-            <GiftOutlined style={{ color: '#FFB7C5', marginRight: 8 }} />
-            Ưu đãi hôm nay
-          </Title>
-          
-          <Row gutter={[24, 24]}>
-            <Col xs={24} md={12}>
-              <Card className="promo-card promo-card-primary">
-                <div className="promo-content">
-                  <div className="promo-icon">🎉</div>
-                  <div className="promo-text">
-                    <div className="promo-title">Giảm giá 20%</div>
-                    <div className="promo-desc">Tất cả đồ uống có gas</div>
-                    <Tag color="red" className="promo-tag">HOT</Tag>
+          <div className="section-header">
+            <div>
+              <Title level={2} className="section-title">
+                <RocketOutlined style={{ color: '#fa541c', marginRight: 8 }} />
+                Tiện ích cửa hàng tiện lợi
+              </Title>
+              <Paragraph style={{ color: '#8c8c8c', marginBottom: 0 }}>
+                Những tính năng thực tế giúp bạn mua sắm nhanh, không bỏ lỡ ưu đãi và tối ưu thời gian.
+              </Paragraph>
+            </div>
+            <Button type="primary" ghost onClick={() => navigate('/services')}>
+              Xem tất cả dịch vụ
+            </Button>
+          </div>
+          <Row gutter={[16, 16]}>
+            {utilityActions.map((action) => (
+              <Col xs={24} sm={12} md={6} key={action.key}>
+                <Card hoverable className="utility-card" onClick={action.onClick}>
+                  <div className="utility-icon">{action.icon}</div>
+                  <div className="utility-content">
+                    <div className="utility-title">{action.title}</div>
+                    <div className="utility-desc">{action.description}</div>
                   </div>
-                </div>
-              </Card>
-            </Col>
-            <Col xs={24} md={12}>
-              <Card className="promo-card promo-card-secondary">
-                <div className="promo-content">
-                  <div className="promo-icon">🚚</div>
-                  <div className="promo-text">
-                    <div className="promo-title">Miễn phí ship</div>
-                    <div className="promo-desc">Đơn hàng từ 100.000đ</div>
-                    <Tag color="blue" className="promo-tag">NEW</Tag>
-                  </div>
-                </div>
-              </Card>
-            </Col>
+                </Card>
+              </Col>
+            ))}
           </Row>
         </div>
       </section>
 
-      {/* Unified Features Section */}
-      <section className="unified-features-section">
+      {/* Essentials Combos */}
+      <section className="essentials-section section-accent-combo">
         <div className="container">
-          <div className="features-grid">
-            {/* Quick Functions */}
-            <div className="feature-group">
-              <Title level={3} className="group-title">
-                <RocketOutlined style={{ color: '#667eea', marginRight: 8 }} />
-                Chức năng nhanh
-              </Title>
-              <div className="feature-cards">
-                <div className="feature-card" onClick={() => navigate('/products?sort=price&order=asc')}>
-                  <div className="feature-icon">
-                    <DollarOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Giá rẻ nhất</div>
-                    <div className="feature-desc">Sản phẩm giá tốt</div>
-                  </div>
-                </div>
-                <div className="feature-card" onClick={() => navigate('/products?sort=date&order=desc')}>
-                  <div className="feature-icon">
-                    <RocketOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Mới nhất</div>
-                    <div className="feature-desc">Sản phẩm vừa về</div>
-                  </div>
-                </div>
-                <div className="feature-card" onClick={() => navigate('/products?stock=true')}>
-                  <div className="feature-icon">
-                    <CheckCircleOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Còn hàng</div>
-                    <div className="feature-desc">Sản phẩm có sẵn</div>
-                  </div>
-                </div>
-                <div className="feature-card" onClick={() => navigate('/products?discount=true')}>
-                  <div className="feature-icon">
-                    <GiftOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Đang giảm giá</div>
-                    <div className="feature-desc">Ưu đãi hấp dẫn</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Why Choose Us */}
-            <div className="feature-group">
-              <Title level={3} className="group-title">
-                <BulbOutlined style={{ color: '#667eea', marginRight: 8 }} />
-                Tại sao chọn chúng tôi?
-              </Title>
-              <div className="feature-cards">
-                <div className="feature-card">
-                  <div className="feature-icon">
-                    <SafetyOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Chất lượng đảm bảo</div>
-                    <div className="feature-desc">100% chính hãng</div>
-                  </div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">
-                    <CustomerServiceOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Hỗ trợ 24/7</div>
-                    <div className="feature-desc">Luôn sẵn sàng</div>
-                  </div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">
-                    <TruckOutlined />
-                  </div>
-                  <div className="feature-content">
-                    <div className="feature-title">Giao hàng nhanh</div>
-                    <div className="feature-desc">15-30 phút</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Store Info */}
-            <div className="feature-group">
-              <Title level={3} className="group-title">
-                <EnvironmentOutlined style={{ color: '#667eea', marginRight: 8 }} />
-                Thông tin cửa hàng
-              </Title>
-              <div className="info-cards">
-                <div className="info-card">
-                  <div className="info-icon">
-                    <ClockCircleOutlined />
-                  </div>
-                  <div className="info-content">
-                    <div className="info-title">Giờ mở cửa</div>
-                    <div className="info-desc">T2-CN: 7:00-22:00</div>
-                  </div>
-                </div>
-                <div className="info-card">
-                  <div className="info-icon">
-                    <TruckOutlined />
-                  </div>
-                  <div className="info-content">
-                    <div className="info-title">Giao hàng</div>
-                    <div className="info-desc">Miễn phí từ 100k</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Contact & Social */}
-            <div className="feature-group">
-              <Title level={3} className="group-title">
-                <PhoneOutlined style={{ color: '#667eea', marginRight: 8 }} />
-                Liên hệ & Kết nối
-              </Title>
-              <div className="contact-cards">
-                <div className="contact-card">
-                  <div className="contact-icon">
-                    <PhoneOutlined />
-                  </div>
-                  <div className="contact-content">
-                    <div className="contact-title">Hotline</div>
-                    <div className="contact-desc">1900-xxxx</div>
-                  </div>
-                </div>
-                <div className="contact-card">
-                  <div className="contact-icon">
-                    <MessageOutlined />
-                  </div>
-                  <div className="contact-content">
-                    <div className="contact-title">Chat trực tiếp</div>
-                    <div className="contact-desc">Hỗ trợ ngay</div>
-                  </div>
-                </div>
-                <div className="contact-card">
-                  <div className="contact-icon">
-                    <MailOutlined />
-                  </div>
-                  <div className="contact-content">
-                    <div className="contact-title">Email</div>
-                    <div className="contact-desc">support@store.com</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="section-header">
+            <Title level={2} className="section-title">
+              <GiftOutlined style={{ marginRight: 8 }} />
+              Combo tiện lợi trong ngày
+            </Title>
+            <Button type="link" onClick={() => navigate('/custom-combo')}>
+              Đặt combo theo nhu cầu →
+            </Button>
           </div>
+          {combosLoading ? (
+            <Row gutter={[16, 16]}>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <Col xs={24} sm={12} md={6} key={i}>
+                  <Card>
+                    <Skeleton active paragraph={{ rows: 3 }} />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          ) : combos.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Paragraph>Chưa có combo nào. Vui lòng quay lại sau.</Paragraph>
+            </div>
+          ) : (
+            <Row gutter={[16, 16]}>
+              {combos.slice(0, 8).map((combo) => {
+                const comboPrice = calculateComboPrice(combo);
+                const productNames = combo.combo_item?.map(item => item.san_pham?.ten_san_pham).filter(Boolean).join(', ') || '';
+                const firstProductImage = combo.combo_item?.[0]?.san_pham?.hinh_anh;
+                return (
+                  <Col xs={24} sm={12} md={6} key={combo.id}>
+                    <Card 
+                      className="combo-card" 
+                      bordered={false} 
+                      hoverable
+                      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                      bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px' }}
+                    >
+                      <div style={{ flex: '0 0 auto', marginBottom: '12px' }}>
+                        {combo.hinh_anh ? (
+                          <img 
+                            src={combo.hinh_anh} 
+                            alt={combo.ten_combo}
+                            style={{ 
+                              width: '100%', 
+                              height: '180px', 
+                              objectFit: 'cover', 
+                              borderRadius: '8px',
+                              display: 'block'
+                            }}
+                          />
+                        ) : firstProductImage ? (
+                          <img 
+                            src={firstProductImage} 
+                            alt={combo.ten_combo}
+                            style={{ 
+                              width: '100%', 
+                              height: '180px', 
+                              objectFit: 'cover', 
+                              borderRadius: '8px',
+                              display: 'block'
+                            }}
+                          />
+                        ) : (
+                          <div style={{ 
+                            width: '100%', 
+                            height: '180px', 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '48px'
+                          }}>
+                            <GiftOutlined />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
+                        <Title level={4} style={{ marginBottom: '8px', fontSize: '16px', minHeight: '48px' }}>
+                          {combo.ten_combo}
+                        </Title>
+                        <Paragraph 
+                          style={{ 
+                            minHeight: '40px', 
+                            marginBottom: '12px',
+                            fontSize: '13px',
+                            color: '#666',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {combo.mo_ta || productNames || 'Combo tiện lợi'}
+                        </Paragraph>
+                        {combo.combo_item && combo.combo_item.length > 0 && (
+                          <ul className="combo-perks" style={{ marginBottom: '12px', paddingLeft: '20px', fontSize: '12px', flex: '1 1 auto' }}>
+                            {combo.combo_item.slice(0, 3).map((item, idx) => (
+                              <li key={idx} style={{ marginBottom: '4px' }}>
+                                {item.san_pham?.ten_san_pham} x{item.so_luong}
+                              </li>
+                            ))}
+                            {combo.combo_item.length > 3 && (
+                              <li style={{ color: '#52c41a', fontWeight: 'bold' }}>
+                                + {combo.combo_item.length - 3} sản phẩm khác
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                      
+                      <div className="combo-footer" style={{ flex: '0 0 auto', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f0f0f0' }}>
+                        <div className="combo-price" style={{ 
+                          fontSize: '20px', 
+                          fontWeight: 'bold', 
+                          color: '#ff4d4f',
+                          marginBottom: '12px',
+                          textAlign: 'center'
+                        }}>
+                          {formatCurrency(comboPrice)}
+                        </div>
+                        <Button 
+                          type="primary" 
+                          block
+                          size="large"
+                          onClick={() => handleAddComboToCart(combo.id, 1)}
+                          icon={<ShoppingCartOutlined />}
+                          style={{ height: '40px' }}
+                        >
+                          Thêm vào giỏ
+                        </Button>
+                      </div>
+                    </Card>
+                  </Col>
+                );
+              })}
+            </Row>
+          )}
         </div>
       </section>
-
 
     </div>
   );

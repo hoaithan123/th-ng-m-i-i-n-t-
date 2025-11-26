@@ -2,9 +2,10 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge, Button, Dropdown } from 'antd';
 import { ShoppingCartOutlined, UserOutlined, LogoutOutlined, HistoryOutlined } from '@ant-design/icons';
+
 import './Header.css';
 
-const Header = ({ cartCount }) => {
+const Header = ({ cartCount, onLogout }) => {
   const navigate = useNavigate();
   const customerInfo = JSON.parse(localStorage.getItem('customerInfo') || '{}');
   const isLoggedIn = !!localStorage.getItem('customerToken');
@@ -12,10 +13,19 @@ const Header = ({ cartCount }) => {
   const handleLogout = () => {
     localStorage.removeItem('customerToken');
     localStorage.removeItem('customerInfo');
+    if (onLogout) {
+      onLogout();
+    }
     navigate('/login');
   };
 
   const userMenuItems = [
+    {
+      key: 'account',
+      icon: <UserOutlined />,
+      label: 'Tài khoản',
+      onClick: () => navigate('/account')
+    },
     {
       key: 'orders',
       icon: <HistoryOutlined />,
@@ -41,6 +51,7 @@ const Header = ({ cartCount }) => {
           <Link to="/">Trang chủ</Link>
           <Link to="/products">Sản phẩm</Link>
           {isLoggedIn && <Link to="/orders">Đơn hàng của tôi</Link>}
+          {isLoggedIn && <Link to="/account">Tài khoản</Link>}
         </nav>
 
         <div className="header-actions">
@@ -57,6 +68,7 @@ const Header = ({ cartCount }) => {
                 placement="bottomRight"
                 trigger={['click']}
                 overlayStyle={{ zIndex: 9999 }}
+                getPopupContainer={(trigger) => trigger.parentElement}
               >
                 <Button 
                   type="text" 

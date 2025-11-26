@@ -73,7 +73,11 @@ const EditOrderModal = ({ order, visible, onCancel, onSuccess }) => {
           label="Phương thức thanh toán"
           rules={[{ required: true, message: 'Vui lòng chọn phương thức thanh toán!' }]}
         >
-          <Select>
+          <Select
+            getPopupContainer={(trigger) => trigger.parentElement}
+            popupMatchSelectWidth={false}
+            styles={{ popup: { zIndex: 2000 } }}
+          >
             <Select.Option value="cod">Thanh toán khi nhận hàng (COD)</Select.Option>
             <Select.Option value="bank_transfer">Chuyển khoản ngân hàng</Select.Option>
             <Select.Option value="vnpay">VNPay</Select.Option>

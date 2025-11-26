@@ -27,7 +27,7 @@ exports.getProducts = async (req, res) => {
             q,
             category,
             priceRange,
-            inStock = 'false'
+            inStock = 'true'
         } = req.query;
 
         // Xử lý priceRange nếu có
@@ -105,6 +105,21 @@ exports.getSuggestions = async (req, res) => {
         const { q = '' } = req.query;
         const suggestions = await productService.getSuggestions(String(q));
         res.json({ items: suggestions });
+    } catch (error) {
+        handleServiceError(res, error);
+    }
+};
+
+// GET: Gợi ý sản phẩm theo giờ giấc với filter theo tags
+exports.getTimeBasedRecommendations = async (req, res) => {
+    try {
+        const { timeOfDay, tags, limit = 12 } = req.query;
+        const products = await productService.getTimeBasedRecommendations(
+            timeOfDay || null,
+            tags || null,
+            Number(limit)
+        );
+        res.json({ items: products });
     } catch (error) {
         handleServiceError(res, error);
     }

@@ -102,10 +102,14 @@ model san_pham {
   ngay_tao             DateTime?              @default(now()) @db.DateTime(0)
   hinh_anh             String?                @db.VarChar(255)
   danh_muc             String?                @db.VarChar(50)
+  tags                 String?                @db.Text
   chi_tiet_don_hang    chi_tiet_don_hang[]
   chi_tiet_hoa_don_ban chi_tiet_hoa_don_ban[]
   chi_tiet_phieu_nhap  chi_tiet_phieu_nhap[]
   gio_hang             gio_hang[]
+  gio_hang_combo_item  gio_hang_combo_item[]
+  combo_item           combo_item[]
+  danh_gia             danh_gia[]
 }
 
 model khach_hang {
@@ -119,7 +123,23 @@ model khach_hang {
   dia_chi       dia_chi_khach[]
   don_hang      don_hang[]
   gio_hang      gio_hang[]
+  gio_hang_combo gio_hang_combo[]
   su_dung_voucher su_dung_voucher[]
+  danh_gia      danh_gia[]
+}
+
+model danh_gia {
+  id             Int         @id @default(autoincrement())
+  id_san_pham    Int
+  id_khach_hang  Int
+  sao            Int         // 1..5
+  noi_dung       String?     @db.Text
+  ngay_tao       DateTime    @default(now()) @db.DateTime(0)
+  san_pham       san_pham    @relation(fields: [id_san_pham], references: [id], onDelete: Cascade)
+  khach_hang     khach_hang  @relation(fields: [id_khach_hang], references: [id], onDelete: Cascade)
+
+  @@index([id_san_pham], map: "id_san_pham")
+  @@index([id_khach_hang], map: "id_khach_hang")
 }
 
 model dia_chi_khach {
@@ -148,6 +168,33 @@ model gio_hang {
 
   @@unique([id_khach_hang, id_san_pham])
   @@index([id_khach_hang])
+  @@index([id_san_pham])
+}
+
+model gio_hang_combo {
+  id            Int                @id @default(autoincrement())
+  id_khach_hang Int
+  ten_combo     String             @db.VarChar(200)
+  gia_ban       Decimal            @db.Decimal(10, 2)
+  so_luong      Int                @default(1)
+  ngay_them     DateTime           @default(now()) @db.DateTime(0)
+  khach_hang    khach_hang         @relation(fields: [id_khach_hang], references: [id], onDelete: Cascade)
+  combo_items   gio_hang_combo_item[]
+
+  @@index([id_khach_hang])
+}
+
+model gio_hang_combo_item {
+  id              Int           @id @default(autoincrement())
+  id_gio_hang_combo Int
+  id_san_pham     Int
+  ten_san_pham    String        @db.VarChar(100)
+  so_luong        Int
+  don_gia         Decimal       @db.Decimal(10, 2)
+  gio_hang_combo  gio_hang_combo @relation(fields: [id_gio_hang_combo], references: [id], onDelete: Cascade)
+  san_pham        san_pham      @relation(fields: [id_san_pham], references: [id], onDelete: Cascade)
+
+  @@index([id_gio_hang_combo])
   @@index([id_san_pham])
 }
 
@@ -288,4 +335,32 @@ enum giao_dich_ngan_hang_trang_thai {
   da_xac_nhan
   bi_tu_choi
   het_han
+}
+
+// Combo System Models
+model combo {
+  id          Int         @id @default(autoincrement())
+  ten_combo   String      @db.VarChar(100)
+  mo_ta       String?     @db.Text
+  gia_ban     Decimal?    @db.Decimal(10, 2)
+  hinh_anh    String?     @db.VarChar(255)
+  trang_thai  Boolean     @default(true)
+  ngay_tao    DateTime    @default(now()) @db.DateTime(0)
+  ngay_cap_nhat DateTime  @updatedAt @db.DateTime(0)
+  combo_item  combo_item[]
+  
+  @@index([trang_thai])
+}
+
+model combo_item {
+  id          Int      @id @default(autoincrement())
+  id_combo    Int
+  id_san_pham Int
+  so_luong    Int      @default(1)
+  combo       combo    @relation(fields: [id_combo], references: [id], onDelete: Cascade)
+  san_pham    san_pham @relation(fields: [id_san_pham], references: [id], onDelete: Cascade)
+  
+  @@unique([id_combo, id_san_pham])
+  @@index([id_combo])
+  @@index([id_san_pham])
 }

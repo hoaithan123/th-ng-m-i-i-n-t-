@@ -100,7 +100,7 @@ const QRPaymentModal = ({
     if (status === 'pending' && paymentData) {
       console.log('🎉 Manual payment success triggered (TEST ONLY)...');
       setStatus('success');
-      message.success('Thanh toán thành công! (TEST)');
+      message.success('Bạn đã đặt hàng thành công!');
       setTimeout(() => {
         onPaymentSuccess && onPaymentSuccess({ 
           orderId, 
@@ -311,9 +311,9 @@ const QRPaymentModal = ({
       case 'loading':
         return 'Đang tạo QR thanh toán...';
       case 'pending':
-        return `Demo: Quét QR để thanh toán ${formatCurrency(amount)}`;
+        return `Quét QR để thanh toán ${formatCurrency(amount)}`;
       case 'success':
-        return 'Demo: Thanh toán thành công!';
+        return 'Bạn đã đặt hàng thành công!';
       case 'timeout':
         return 'Giao dịch đã hết hạn!';
       case 'error':

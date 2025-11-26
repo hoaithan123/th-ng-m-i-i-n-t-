@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Row, Col, Input, Pagination, Spin, Empty, Card, Select, Button, Space, Tag, Divider } from 'antd';
 import { 
@@ -15,19 +15,45 @@ import './ProductList.css';
 
 const { Option } = Select;
 
+const CATEGORY_OPTIONS = [
+  { value: 'drinks', label: 'Đồ uống' },
+  { value: 'snacks', label: 'Bánh kẹo' },
+  { value: 'dairy', label: 'Sữa & Sản phẩm từ sữa' },
+  { value: 'instant', label: 'Mì ăn liền' },
+  { value: 'frozen', label: 'Đồ đông lạnh' },
+  { value: 'household', label: 'Đồ gia dụng' },
+  { value: 'personalcare', label: 'Chăm sóc cá nhân' },
+  { value: 'groceries', label: 'Tạp hóa' }
+];
+
+const PRICE_RANGE_OPTIONS = [
+  { value: '0-10000', label: 'Dưới 10.000đ' },
+  { value: '10000-25000', label: '10.000đ - 25.000đ' },
+  { value: '25000-50000', label: '25.000đ - 50.000đ' },
+  { value: '50000-100000', label: '50.000đ - 100.000đ' },
+  { value: '100000-999999', label: 'Trên 100.000đ' }
+];
+
 const ProductList = ({ onCartUpdate }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
-  const initialCategory = new URLSearchParams(location.search).get('category') || '';
+  const urlParams = new URLSearchParams(location.search);
+  const initialCategory = urlParams.get('category') || undefined;
+  const initialCategoryOpt = initialCategory
+    ? CATEGORY_OPTIONS.find(o => o.value === initialCategory)
+    : undefined;
+  const initialTags = urlParams.get('tags') || undefined;
+  const initialTimeOfDay = urlParams.get('timeOfDay') || undefined;
   const [filters, setFilters] = useState({
-    category: initialCategory,
+    category: initialCategoryOpt,
+    tags: initialTags,
+    timeOfDay: initialTimeOfDay,
     sortBy: 'name',
     sortOrder: 'asc',
-    priceRange: '',
-    inStock: false
+    priceRange: undefined
   });
   const [pagination, setPagination] = useState({
     page: 1,
@@ -35,19 +61,36 @@ const ProductList = ({ onCartUpdate }) => {
     total: 0
   });
   const [showFilters, setShowFilters] = useState(false);
+  const dropdownContainer = useCallback(() => document.body, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const cat = params.get('category');
-    if (cat) {
-      setFilters(prev => ({ ...prev, category: cat }));
+    const tags = params.get('tags');
+    const timeOfDay = params.get('timeOfDay');
+    const priceRange = params.get('priceRange');
+    const searchParam = params.get('search') || params.get('q') || '';
+    const next = {};
+    if (cat) next.category = CATEGORY_OPTIONS.find(o => o.value === cat);
+    if (tags) next.tags = tags;
+    if (timeOfDay) next.timeOfDay = timeOfDay;
+    if (priceRange) next.priceRange = PRICE_RANGE_OPTIONS.find(o => o.value === priceRange);
+    if (Object.keys(next).length > 0) setFilters(prev => ({ ...prev, ...next }));
+    if (searchParam !== undefined) {
+      setSearchText(searchParam);
+      setPagination(prev => ({ ...prev, page: 1 }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
   useEffect(() => {
-    fetchProducts();
+    const t = setTimeout(() => {
+      fetchProducts();
+    }, 150);
+    return () => clearTimeout(t);
   }, [pagination.page, searchText, filters]);
+
+  // Removed auto-scroll to avoid potential layout thrashing while interacting with dropdowns
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -56,12 +99,22 @@ const ProductList = ({ onCartUpdate }) => {
         page: pagination.page,
         limit: pagination.limit,
         q: searchText,
-        ...filters
+        category: filters.category?.value,
+        tags: filters.tags,
+        timeOfDay: filters.timeOfDay,
+        sortBy: filters.sortBy,
+        sortOrder: filters.sortOrder,
+        priceRange: filters.priceRange?.value,
       };
       
-      console.log('Fetching products with params:', params);
+      // Remove empty filters
+      Object.keys(params).forEach(key => {
+        if (params[key] === '' || params[key] === null || params[key] === undefined) {
+          delete params[key];
+        }
+      });
+      
       const response = await storefrontAPI.getProducts(params);
-      console.log('Products response:', response.data);
       setProducts(response.data.items || []);
       setPagination(prev => ({
         ...prev,
@@ -80,39 +133,37 @@ const ProductList = ({ onCartUpdate }) => {
   };
 
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    const normalized = value === '' || value === null ? undefined : value;
+    setFilters(prev => ({ ...prev, [key]: normalized }));
     setPagination(prev => ({ ...prev, page: 1 }));
-    if (key === 'category') {
-      const params = new URLSearchParams(location.search);
-      if (value) {
-        params.set('category', value);
-      } else {
-        params.delete('category');
-      }
-      navigate({ pathname: '/products', search: params.toString() });
-    }
   };
 
   const clearFilters = () => {
     setFilters({
-      category: '',
+      category: undefined,
+      tags: undefined,
+      timeOfDay: undefined,
       sortBy: 'name',
       sortOrder: 'asc',
-      priceRange: '',
-      inStock: false
+      priceRange: undefined
     });
     setSearchText('');
     setPagination(prev => ({ ...prev, page: 1 }));
     const params = new URLSearchParams(location.search);
     params.delete('category');
+    params.delete('tags');
+    params.delete('timeOfDay');
+    params.delete('search');
+    params.delete('q');
     navigate({ pathname: '/products', search: params.toString() });
   };
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.category) count++;
-    if (filters.priceRange) count++;
-    if (filters.inStock) count++;
+    if (filters.category?.value) count++;
+    if (filters.tags) count++;
+    if (filters.timeOfDay) count++;
+    if (filters.priceRange?.value) count++;
     if (filters.sortBy !== 'name' || filters.sortOrder !== 'asc') count++;
     return count;
   };
@@ -135,7 +186,7 @@ const ProductList = ({ onCartUpdate }) => {
           <Button
             icon={<FilterOutlined />}
             size="large"
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => setShowFilters(prev => !prev)}
             type={showFilters ? 'primary' : 'default'}
           >
             Bộ lọc {getActiveFiltersCount() > 0 && `(${getActiveFiltersCount()})`}
@@ -144,7 +195,7 @@ const ProductList = ({ onCartUpdate }) => {
       </div>
 
       {/* Filters Panel */}
-      {showFilters && (
+      <div style={{ display: showFilters ? 'block' : 'none' }}>
         <Card className="filters-panel" style={{ marginBottom: 24 }}>
           <Row gutter={[16, 16]} align="middle">
             <Col xs={24} sm={12} md={6}>
@@ -152,19 +203,21 @@ const ProductList = ({ onCartUpdate }) => {
               <Select
                 placeholder="Chọn danh mục"
                 style={{ width: '100%' }}
+                labelInValue
                 value={filters.category}
-                onChange={(value) => handleFilterChange('category', value)}
+                onChange={(opt) => { handleFilterChange('category', opt); }}
+                getPopupContainer={dropdownContainer}
+                virtual={false}
+                dropdownMatchSelectWidth={false}
+                dropdownStyle={{ zIndex: 2000 }}
+                listHeight={256}
                 allowClear
-              >
-                <Option value="drinks">Đồ uống</Option>
-                <Option value="snacks">Bánh kẹo</Option>
-                <Option value="dairy">Sữa & Sản phẩm từ sữa</Option>
-                <Option value="instant">Mì ăn liền</Option>
-                <Option value="frozen">Đồ đông lạnh</Option>
-                <Option value="household">Đồ gia dụng</Option>
-                <Option value="personalcare">Chăm sóc cá nhân</Option>
-                <Option value="groceries">Tạp hóa</Option>
-              </Select>
+                options={CATEGORY_OPTIONS}
+                optionFilterProp="label"
+                optionLabelProp="label"
+                showSearch
+                placement="bottomLeft"
+              />
             </Col>
             
             <Col xs={24} sm={12} md={6}>
@@ -174,9 +227,14 @@ const ProductList = ({ onCartUpdate }) => {
                 value={`${filters.sortBy}-${filters.sortOrder}`}
                 onChange={(value) => {
                   const [sortBy, sortOrder] = value.split('-');
-                  handleFilterChange('sortBy', sortBy);
-                  handleFilterChange('sortOrder', sortOrder);
+                  setFilters(prev => ({ ...prev, sortBy, sortOrder }));
+                  setPagination(prev => ({ ...prev, page: 1 }));
                 }}
+                getPopupContainer={dropdownContainer}
+                virtual={false}
+                dropdownMatchSelectWidth={false}
+                dropdownStyle={{ zIndex: 2000 }}
+                listHeight={256}
               >
                 <Option value="name-asc">Tên A-Z</Option>
                 <Option value="name-desc">Tên Z-A</Option>
@@ -192,27 +250,25 @@ const ProductList = ({ onCartUpdate }) => {
               <Select
                 placeholder="Chọn khoảng giá"
                 style={{ width: '100%' }}
+                labelInValue
                 value={filters.priceRange}
-                onChange={(value) => handleFilterChange('priceRange', value)}
+                onChange={(opt) => { handleFilterChange('priceRange', opt); }}
+                getPopupContainer={dropdownContainer}
+                virtual={false}
+                dropdownMatchSelectWidth={false}
+                dropdownStyle={{ zIndex: 2000 }}
+                listHeight={256}
                 allowClear
-              >
-                <Option value="0-10000">Dưới 10.000đ</Option>
-                <Option value="10000-25000">10.000đ - 25.000đ</Option>
-                <Option value="25000-50000">25.000đ - 50.000đ</Option>
-                <Option value="50000-100000">50.000đ - 100.000đ</Option>
-                <Option value="100000-999999">Trên 100.000đ</Option>
-              </Select>
+                options={PRICE_RANGE_OPTIONS}
+                optionFilterProp="label"
+                optionLabelProp="label"
+                showSearch
+                placement="bottomLeft"
+              />
             </Col>
             
             <Col xs={24} sm={12} md={6}>
               <Space>
-                <Button
-                  type={filters.inStock ? 'primary' : 'default'}
-                  onClick={() => handleFilterChange('inStock', !filters.inStock)}
-                  icon={<StarOutlined />}
-                >
-                  Còn hàng
-                </Button>
                 <Button onClick={clearFilters}>
                   Xóa bộ lọc
                 </Button>
@@ -220,7 +276,7 @@ const ProductList = ({ onCartUpdate }) => {
             </Col>
           </Row>
         </Card>
-      )}
+      </div>
 
       {/* Results Summary */}
       {!loading && (
@@ -232,19 +288,24 @@ const ProductList = ({ onCartUpdate }) => {
                 Tìm kiếm: "{searchText}"
               </Tag>
             )}
-            {filters.category && (
-              <Tag closable onClose={() => handleFilterChange('category', '')}>
-                Danh mục: {filters.category}
+            {filters.category?.value && (
+              <Tag closable onClose={() => handleFilterChange('category', undefined)}>
+                Danh mục: {filters.category?.label}
               </Tag>
             )}
-            {filters.priceRange && (
-              <Tag closable onClose={() => handleFilterChange('priceRange', '')}>
-                Giá: {filters.priceRange}
+            {filters.tags && (
+              <Tag closable onClose={() => handleFilterChange('tags', undefined)} color="pink">
+                Tags: {filters.tags}
               </Tag>
             )}
-            {filters.inStock && (
-              <Tag closable onClose={() => handleFilterChange('inStock', false)}>
-                Còn hàng
+            {filters.timeOfDay && (
+              <Tag closable onClose={() => handleFilterChange('timeOfDay', undefined)} color="orange">
+                Khung giờ: {filters.timeOfDay === 'morning' ? 'Buổi sáng' : filters.timeOfDay === 'afternoon' ? 'Buổi chiều' : filters.timeOfDay === 'evening' ? 'Buổi tối' : 'Khuya'}
+              </Tag>
+            )}
+            {filters.priceRange?.value && (
+              <Tag closable onClose={() => handleFilterChange('priceRange', undefined)}>
+                Giá: {filters.priceRange?.label}
               </Tag>
             )}
           </Space>
@@ -271,10 +332,10 @@ const ProductList = ({ onCartUpdate }) => {
         </Empty>
       ) : (
         <>
-          <div className="products-grid">
-            <Row gutter={[24, 24]}>
-              {products.map(product => (
-                <Col xs={24} sm={12} md={8} lg={6} key={product.id}>
+          <div style={{ marginBottom: '100px' }}>
+            <Row gutter={[16, 16]}>
+              {products.map((product, index) => (
+                <Col xs={24} sm={12} md={8} lg={6} key={product.id || index}>
                   <ProductCard product={product} onCartUpdate={onCartUpdate} />
                 </Col>
               ))}

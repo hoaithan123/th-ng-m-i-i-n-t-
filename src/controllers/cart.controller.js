@@ -75,3 +75,40 @@ exports.clearCart = async (req, res) => {
         handleServiceError(res, error);
     }
 };
+
+// Thêm combo vào giỏ hàng (custom combo)
+exports.addComboToCart = async (req, res) => {
+    try {
+        const comboData = req.body;
+        const cartCombo = await cartService.addComboToCart(req.customerId, comboData);
+        res.json({
+            message: 'Đã thêm combo vào giỏ hàng',
+            cartCombo
+        });
+    } catch (error) {
+        handleServiceError(res, error);
+    }
+};
+
+// Cập nhật số lượng combo
+exports.updateComboQuantity = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { so_luong } = req.body;
+        const updated = await cartService.updateComboQuantity(id, req.customerId, so_luong);
+        res.json(updated);
+    } catch (error) {
+        handleServiceError(res, error);
+    }
+};
+
+// Xóa combo khỏi giỏ hàng
+exports.removeComboFromCart = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await cartService.removeComboFromCart(id, req.customerId);
+        res.json({ message: 'Đã xóa combo khỏi giỏ hàng' });
+    } catch (error) {
+        handleServiceError(res, error);
+    }
+};

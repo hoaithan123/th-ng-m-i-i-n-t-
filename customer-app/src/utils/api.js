@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3001/api';
+export const API_URL = 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -39,9 +39,12 @@ export const storefrontAPI = {
   getProducts: (params) => api.get('/storefront/products', { params }),
   getProductDetail: (id) => api.get(`/storefront/products/${id}`),
   getSuggestions: (q) => api.get('/storefront/suggestions', { params: { q } }),
+  getTimeBasedRecommendations: (params) => api.get('/storefront/recommendations/time-based', { params }),
   // Voucher API methods
   get: (url) => api.get(url),
-  post: (url, data) => api.post(url, data)
+  post: (url, data) => api.post(url, data),
+  getProductReviews: (id, params) => api.get(`/storefront/products/${id}/reviews`, { params }),
+  addProductReview: (id, data) => api.post(`/storefront/products/${id}/reviews`, data)
 };
 
 export const cartAPI = {
@@ -50,6 +53,9 @@ export const cartAPI = {
   updateCartItem: (id, data) => api.put(`/cart/${id}`, data),
   removeFromCart: (id) => api.delete(`/cart/${id}`),
   clearCart: () => api.delete('/cart'),
+  post: (url, data) => api.post(`/cart${url}`, data),
+  put: (url, data) => api.put(`/cart${url}`, data),
+  delete: (url) => api.delete(`/cart${url}`),
 };
 
 export const orderAPI = {
@@ -65,8 +71,13 @@ export const paymentAPI = {
   createVnpayForCustomer: (orderId) => api.get(`/payment/vnpay/create-customer/${orderId}`),
   createMomoForCustomer: (orderId) => api.get(`/payment/momo/create-customer/${orderId}`),
   getPublicConfig: () => api.get('/payment/config/public'),
-  createStripeForCustomer: (orderId) => api.get(`/payment/stripe/create-customer/${orderId}`),
   createPaypalForCustomer: (orderId) => api.get(`/payment/paypal/create-customer/${orderId}`),
+};
+
+export const comboAPI = {
+  getAllCombos: () => api.get('/combo'),
+  getComboById: (id) => api.get(`/combo/${id}`),
+  addComboToCart: (id, so_luong) => api.post(`/combo/${id}/add-to-cart`, { so_luong }),
 };
 
 export default api;

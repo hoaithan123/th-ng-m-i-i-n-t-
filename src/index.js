@@ -38,6 +38,7 @@ const storefrontRoutes = require('./routes/storefront.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const qrPaymentRoutes = require('./routes/qrPayment.routes');
 const voucherRoutes = require('./routes/voucher.routes');
+const comboRoutes = require('./routes/combo.routes');
 // Đã loại bỏ import các route phát hiện/xác nhận chuyển khoản ngân hàng
 
 app.use(cors());
@@ -113,13 +114,21 @@ app.use('/api/address', addressRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/qr-payment', qrPaymentRoutes);
 app.use('/api/voucher', voucherRoutes);
-// Tắt toàn bộ các route xác nhận/phát hiện chuyển khoản ngân hàng để chỉ giữ phần tạo QR
-// app.use('/api/bank-transactions', bankTransactionRoutes);
-// app.use('/api/auto-payment-detection', autoPaymentDetectionRoutes);
-// app.use('/api/ultra-accurate-payment-detection', ultraAccuratePaymentDetectionRoutes);
-// app.use('/api/simple-bank-payment-detection', simpleBankPaymentDetectionRoutes);
-// app.use('/api/fully-auto-payment-detection', fullyAutoPaymentDetectionRoutes);
-// app.use('/api/secure-payment-detection', securePaymentDetectionRoutes);
+app.use('/api/combo', comboRoutes);
+// Enable các route cần thiết cho admin panel
+const bankTransactionRoutes = require('./routes/bankTransaction.routes');
+const autoPaymentDetectionRoutes = require('./routes/autoPaymentDetection.routes');
+const ultraAccuratePaymentDetectionRoutes = require('./routes/ultraAccuratePaymentDetection.routes');
+const simpleBankPaymentDetectionRoutes = require('./routes/simpleBankPaymentDetection.routes');
+const fullyAutoPaymentDetectionRoutes = require('./routes/fullyAutoPaymentDetection.routes');
+const securePaymentDetectionRoutes = require('./routes/securePaymentDetection.routes');
+
+app.use('/api/bank-transactions', bankTransactionRoutes);
+app.use('/api/auto-payment-detection', autoPaymentDetectionRoutes);
+app.use('/api/ultra-accurate-payment-detection', ultraAccuratePaymentDetectionRoutes);
+app.use('/api/simple-bank-payment-detection', simpleBankPaymentDetectionRoutes);
+app.use('/api/fully-auto-payment-detection', fullyAutoPaymentDetectionRoutes);
+app.use('/api/secure-payment-detection', securePaymentDetectionRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

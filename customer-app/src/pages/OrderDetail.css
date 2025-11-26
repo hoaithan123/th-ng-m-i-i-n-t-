@@ -3,18 +3,75 @@
   margin: 0 auto;
   padding: 48px 24px;
   min-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.order-detail-page .ant-btn {
+  border-radius: 999px;
 }
 
 .order-detail-page .ant-card {
-  border-radius: 8px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
 }
 
-.order-detail-page .ant-descriptions-item-label {
-  font-weight: 500;
-  background: #fafafa;
+.order-detail-page .ant-card-head {
+  background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+  padding: 16px 20px;
+}
+
+.order-detail-page .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.order-detail-page .ant-card-extra {
+  display: flex;
+  align-items: center;
+}
+
+.order-detail-page .ant-descriptions {
+  background: #ffffff;
+}
+
+.order-detail-page .ant-descriptions-bordered .ant-descriptions-item-label {
+  font-weight: 600;
+  background: #eff6ff;
+  color: #0f172a;
+}
+
+.order-detail-page .ant-descriptions-bordered .ant-descriptions-item-content {
+  background: #ffffff;
+}
+
+.order-detail-page .ant-table-thead > tr > th {
+  background: #eff6ff !important;
+  font-weight: 600;
+}
+
+.order-detail-page .ant-table-summary {
+  background: #ecfdf5;
+}
+
+.order-detail-page .payment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.03);
 }
 
 @media (max-width: 768px) {
+  .order-detail-page {
+    padding: 32px 16px;
+  }
+
   .order-detail-page .ant-descriptions {
     font-size: 14px;
   }

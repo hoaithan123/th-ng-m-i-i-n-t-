@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const customerAuth = require('../middleware/customerAuth');
+const { authenticateToken, checkRole } = require('../middleware/auth');
 const Joi = require('joi');
 
 // Schema validation
@@ -187,6 +188,91 @@ router.put('/profile', customerAuth, async (req, res) => {
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Lỗi khi cập nhật thông tin' });
+  }
+});
+
+// Admin routes - Lấy tất cả khách hàng
+router.get('/admin/all', authenticateToken, checkRole('quan_ly'), async (req, res) => {
+  try {
+    const customers = await prisma.khach_hang.findMany({
+      select: {
+        id: true,
+        ho_ten: true,
+        email: true,
+        so_dien_thoai: true,
+        dia_chi: true,
+        ngay_tao: true,
+        trang_thai: true
+      },
+      orderBy: {
+        ngay_tao: 'desc'
+      }
+    });
+
+    res.json(customers);
+  } catch (error) {
+    console.error('Get all customers error:', error);
+    res.status(500).json({ error: 'Lỗi khi lấy danh sách khách hàng' });
+  }
+});
+
+// Admin routes - Lấy chi tiết khách hàng
+router.get('/admin/:id', authenticateToken, checkRole('quan_ly'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const customer = await prisma.khach_hang.findUnique({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        ho_ten: true,
+        email: true,
+        so_dien_thoai: true,
+        dia_chi: true,
+        ngay_tao: true,
+        trang_thai: true
+      }
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    }
+
+    res.json(customer);
+  } catch (error) {
+    console.error('Get customer detail error:', error);
+    res.status(500).json({ error: 'Lỗi khi lấy thông tin khách hàng' });
+  }
+});
+
+// Admin routes - Cập nhật trạng thái khách hàng
+router.put('/admin/:id/status', authenticateToken, checkRole('quan_ly'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { trang_thai } = req.body;
+
+    if (!trang_thai || !['active', 'inactive'].includes(trang_thai)) {
+      return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
+    }
+
+    const customer = await prisma.khach_hang.update({
+      where: { id: parseInt(id) },
+      data: { trang_thai },
+      select: {
+        id: true,
+        ho_ten: true,
+        email: true,
+        trang_thai: true
+      }
+    });
+
+    res.json({
+      message: 'Cập nhật trạng thái thành công',
+      customer
+    });
+  } catch (error) {
+    console.error('Update customer status error:', error);
+    res.status(500).json({ error: 'Lỗi khi cập nhật trạng thái khách hàng' });
   }
 });
 

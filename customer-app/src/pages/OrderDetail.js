@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Empty, Button, Table, Space, Modal, message } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, BankOutlined, MobileOutlined, CreditCardOutlined } from '@ant-design/icons';
+
 import dayjs from 'dayjs';
 import { orderAPI } from '../utils/api';
 import EditOrderModal from '../components/EditOrderModal';
@@ -56,6 +57,23 @@ const OrderDetail = () => {
       'momo': 'MoMo'
     };
     return methods[method] || method;
+  };
+
+  const getPaymentMethodIcon = (method) => {
+    switch (method) {
+      case 'cod':
+        return <DollarCircleOutlined style={{ color: '#0f766e' }} />;
+      case 'bank_transfer':
+        return <BankOutlined style={{ color: '#2563eb' }} />;
+      case 'momo':
+        return <MobileOutlined style={{ color: '#7c3aed' }} />;
+      case 'vnpay':
+      case 'stripe':
+      case 'paypal':
+        return <CreditCardOutlined style={{ color: '#0f172a' }} />;
+      default:
+        return <DollarCircleOutlined style={{ color: '#0f172a' }} />;
+    }
   };
 
   const handleEditOrder = () => {
@@ -199,7 +217,10 @@ const OrderDetail = () => {
             </Descriptions.Item>
           )}
           <Descriptions.Item label="Phương thức thanh toán" span={2}>
-            {getPaymentMethodText(order.phuong_thuc_thanh_toan)}
+            <span className="payment-chip">
+              {getPaymentMethodIcon(order.phuong_thuc_thanh_toan)}
+              <span>{getPaymentMethodText(order.phuong_thuc_thanh_toan)}</span>
+            </span>
           </Descriptions.Item>
         </Descriptions>
       </Card>

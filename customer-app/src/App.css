@@ -55,12 +55,6 @@ body {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-/* Card hover effects */
-.ant-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-}
-
 /* Loading animation */
 @keyframes fadeInUp {
   from {

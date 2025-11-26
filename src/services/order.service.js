@@ -39,38 +39,78 @@ exports.createOrderFromCart = async (customerId, data) => {
         throw new CustomError('Vui lòng điền đầy đủ thông tin giao hàng', 400);
     }
 
-    // 2. Lấy giỏ hàng và kiểm tra
-    let cartItems = await prisma.gio_hang.findMany({
-        where: { id_khach_hang: customerId },
-        include: { san_pham: true }
-    });
+    // 2. Lấy giỏ hàng và combo, kiểm tra
+    const [cartProducts, cartCombos] = await Promise.all([
+        prisma.gio_hang.findMany({
+            where: { id_khach_hang: customerId },
+            include: { san_pham: true }
+        }),
+        prisma.gio_hang_combo.findMany({
+            where: { id_khach_hang: customerId },
+            include: { combo_items: { include: { san_pham: true } } }
+        })
+    ]);
 
-    if (cartItems.length === 0) {
+    if (cartProducts.length === 0 && cartCombos.length === 0) {
         throw new CustomError('Giỏ hàng trống', 400);
     }
 
-    // 2.1. Nếu có danh sách item được chọn, chỉ giữ các item này
-    let selectedIds = Array.isArray(selected_item_ids) ? selected_item_ids.map((v) => Number(v)).filter(Boolean) : [];
+    // 2.1. Xử lý selected_item_ids (format: "product-{id}" hoặc "combo-{id}")
+    let selectedIds = Array.isArray(selected_item_ids) ? selected_item_ids : [];
+    let selectedProductIds = [];
+    let selectedComboIds = [];
+
     if (selectedIds.length > 0) {
-        cartItems = cartItems.filter((ci) => selectedIds.includes(ci.id));
-        if (cartItems.length === 0) {
-            throw new CustomError('Không tìm thấy sản phẩm đã chọn trong giỏ', 400);
-        }
-    } else {
-        // Nếu không truyền selected_item_ids, coi như chọn tất cả (hành vi cũ)
-        selectedIds = cartItems.map((ci) => ci.id);
+        selectedProductIds = selectedIds
+            .filter(id => String(id).startsWith('product-'))
+            .map(id => parseInt(String(id).replace('product-', '')))
+            .filter(Boolean);
+        selectedComboIds = selectedIds
+            .filter(id => String(id).startsWith('combo-'))
+            .map(id => parseInt(String(id).replace('combo-', '')))
+            .filter(Boolean);
     }
 
-    // 3. Kiểm tra tồn kho cho các item được chọn
-    for (const item of cartItems) {
+    // Lọc các item được chọn
+    let filteredProducts = selectedIds.length > 0 && selectedProductIds.length > 0
+        ? cartProducts.filter(p => selectedProductIds.includes(p.id))
+        : selectedIds.length === 0 ? cartProducts : [];
+
+    let filteredCombos = selectedIds.length > 0 && selectedComboIds.length > 0
+        ? cartCombos.filter(c => selectedComboIds.includes(c.id))
+        : selectedIds.length === 0 ? cartCombos : [];
+
+    if (filteredProducts.length === 0 && filteredCombos.length === 0) {
+        throw new CustomError('Không tìm thấy sản phẩm đã chọn trong giỏ', 400);
+    }
+
+    // 3. Kiểm tra tồn kho cho các sản phẩm
+    for (const item of filteredProducts) {
         if (item.san_pham.so_luong < item.so_luong) {
             throw new CustomError(`Sản phẩm "${item.san_pham.ten_san_pham}" chỉ còn ${item.san_pham.so_luong} ${item.san_pham.don_vi_tinh}`, 400);
         }
     }
 
+    // 3.1. Kiểm tra tồn kho cho các combo
+    for (const combo of filteredCombos) {
+        for (const comboItem of combo.combo_items) {
+            const requiredQuantity = comboItem.so_luong * combo.so_luong;
+            if (comboItem.san_pham.so_luong < requiredQuantity) {
+                throw new CustomError(
+                    `Sản phẩm "${comboItem.san_pham.ten_san_pham}" trong combo "${combo.ten_combo}" chỉ còn ${comboItem.san_pham.so_luong}, cần ${requiredQuantity}`,
+                    400
+                );
+            }
+        }
+    }
+
     // 4. Tính toán tổng tiền BAN ĐẦU (chưa giảm giá)
-    let tong_tien_goc = cartItems.reduce((sum, item) => {
+    let tong_tien_goc = filteredProducts.reduce((sum, item) => {
         return sum + (Number(item.san_pham.gia_ban) * item.so_luong);
+    }, 0);
+
+    tong_tien_goc += filteredCombos.reduce((sum, combo) => {
+        return sum + (Number(combo.gia_ban) * combo.so_luong);
     }, 0);
 
     // 5. ÁP DỤNG LOGIC VOUCHER
@@ -138,6 +178,27 @@ exports.createOrderFromCart = async (customerId, data) => {
 
     // 7. Thực thi Transaction để đảm bảo tính toàn vẹn
     return prisma.$transaction(async (tx) => {
+        // Tạo chi tiết đơn hàng từ sản phẩm
+        const orderDetails = filteredProducts.map(item => ({
+            id_san_pham: item.id_san_pham,
+            ten_san_pham: item.san_pham.ten_san_pham,
+            so_luong: item.so_luong,
+            don_gia: toNumber(item.san_pham.gia_ban).toFixed(2)
+        }));
+
+        // Tạo chi tiết đơn hàng từ combo (tách combo thành các sản phẩm riêng lẻ)
+        for (const combo of filteredCombos) {
+            for (const comboItem of combo.combo_items) {
+                const totalQuantity = comboItem.so_luong * combo.so_luong;
+                orderDetails.push({
+                    id_san_pham: comboItem.id_san_pham,
+                    ten_san_pham: `${comboItem.ten_san_pham} (${combo.ten_combo})`,
+                    so_luong: totalQuantity,
+                    don_gia: toNumber(comboItem.don_gia).toFixed(2)
+                });
+            }
+        }
+
         // Tạo đơn hàng
         const order = await tx.don_hang.create({
             data: {
@@ -152,12 +213,7 @@ exports.createOrderFromCart = async (customerId, data) => {
                 trang_thai: 'cho_xac_nhan',
                 trang_thai_thanh_toan: phuong_thuc_thanh_toan === 'cod' ? false : false, 
                 chi_tiet_don_hang: {
-                    create: cartItems.map(item => ({
-                        id_san_pham: item.id_san_pham,
-                        ten_san_pham: item.san_pham.ten_san_pham,
-                        so_luong: item.so_luong,
-                        don_gia: toNumber(item.san_pham.gia_ban).toFixed(2)
-                    }))
+                    create: orderDetails
                 },
             },
             include: { chi_tiet_don_hang: true }
@@ -189,9 +245,9 @@ exports.createOrderFromCart = async (customerId, data) => {
             }
         }
 
-        // Trừ tồn kho (Atomic Update) theo các item được chọn
+        // Trừ tồn kho cho sản phẩm
         await Promise.all(
-            cartItems.map(item =>
+            filteredProducts.map(item =>
                 tx.san_pham.update({
                     where: { id: item.id_san_pham },
                     data: { so_luong: { decrement: item.so_luong } }
@@ -199,10 +255,38 @@ exports.createOrderFromCart = async (customerId, data) => {
             )
         );
 
-        // Xóa các item đã dùng để tạo đơn (KHÔNG xóa toàn bộ giỏ)
-        await tx.gio_hang.deleteMany({
-            where: { id_khach_hang: customerId, id: { in: selectedIds } }
-        });
+        // Trừ tồn kho cho combo (từng sản phẩm trong combo)
+        for (const combo of filteredCombos) {
+            for (const comboItem of combo.combo_items) {
+                const totalQuantity = comboItem.so_luong * combo.so_luong;
+                await tx.san_pham.update({
+                    where: { id: comboItem.id_san_pham },
+                    data: { so_luong: { decrement: totalQuantity } }
+                });
+            }
+        }
+
+        // Xóa các item đã dùng để tạo đơn CHỈ khi COD.
+        // Với chuyển khoản ngân hàng/MoMo: giữ lại trong giỏ để khách có thể đặt lại nếu hủy giao dịch.
+        if (phuong_thuc_thanh_toan === 'cod') {
+            if (selectedProductIds.length > 0 || selectedIds.length === 0) {
+                const productIdsToDelete = selectedIds.length > 0 ? selectedProductIds : filteredProducts.map(p => p.id);
+                if (productIdsToDelete.length > 0) {
+                    await tx.gio_hang.deleteMany({
+                        where: { id_khach_hang: customerId, id: { in: productIdsToDelete } }
+                    });
+                }
+            }
+
+            if (selectedComboIds.length > 0 || selectedIds.length === 0) {
+                const comboIdsToDelete = selectedIds.length > 0 ? selectedComboIds : filteredCombos.map(c => c.id);
+                if (comboIdsToDelete.length > 0) {
+                    await tx.gio_hang_combo.deleteMany({
+                        where: { id_khach_hang: customerId, id: { in: comboIdsToDelete } }
+                    });
+                }
+            }
+        }
 
         return order;
     });

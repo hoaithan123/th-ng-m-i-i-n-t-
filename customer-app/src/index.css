@@ -11,3 +11,86 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.star-sparkle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 2px rgba(250, 173, 20, 0.6));
+  animation: starPulse 2.2s ease-in-out infinite;
+  will-change: transform, filter;
+}
+.star-sparkle svg {
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.star-sparkle::after {
+  content: "";
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  inset: 0;
+  margin: auto;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 60%);
+  transform: rotate(0deg) scale(1);
+  opacity: 0.7;
+  pointer-events: none;
+  animation: starSparkle 1.8s linear infinite;
+}
+.star-sparkle:hover {
+  filter: drop-shadow(0 0 6px rgba(250, 173, 20, 0.9));
+}
+.star-sparkle:hover svg {
+  transform: scale(1.06) rotate(-1deg);
+}
+
+.rating-sparkle.ant-rate {
+  display: inline-flex;
+  gap: 2px;
+}
+.rating-sparkle .ant-rate-star {
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+.rating-sparkle .ant-rate-star-full .anticon,
+.rating-sparkle .ant-rate-star-half .anticon {
+  filter: drop-shadow(0 0 3px rgba(250, 173, 20, 0.6));
+  animation: starPulse 2.4s ease-in-out infinite;
+}
+.rating-sparkle .ant-rate-star-full,
+.rating-sparkle .ant-rate-star-half {
+  filter: drop-shadow(0 0 3px rgba(250, 173, 20, 0.6));
+  animation: starPulse 2.4s ease-in-out infinite;
+}
+.rating-sparkle .ant-rate-star:hover .anticon,
+.rating-sparkle .ant-rate-star:hover ~ .ant-rate-star .anticon {
+  filter: drop-shadow(0 0 6px rgba(250, 173, 20, 0.9));
+}
+.rating-sparkle .ant-rate-star:hover {
+  transform: translateY(-1px) scale(1.05);
+  filter: drop-shadow(0 0 6px rgba(250, 173, 20, 0.9));
+}
+.rating-sparkle:active .ant-rate-star {
+  transform: scale(0.98);
+}
+
+@keyframes starPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(250, 173, 20, 0.5)); }
+  50% { transform: scale(1.04); filter: drop-shadow(0 0 5px rgba(250, 173, 20, 0.8)); }
+}
+@keyframes starSparkle {
+  0% { opacity: 0.6; transform: rotate(0deg) scale(1); }
+  50% { opacity: 0.9; transform: rotate(180deg) scale(1.05); }
+  100% { opacity: 0.6; transform: rotate(360deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-sparkle,
+  .rating-sparkle .ant-rate-star-full .anticon,
+  .rating-sparkle .ant-rate-star-half .anticon {
+    animation: none !important;
+  }
+  .rating-sparkle .ant-rate-star,
+  .star-sparkle svg {
+    transition: none !important;
+  }
+}
